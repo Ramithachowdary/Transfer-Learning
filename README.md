@@ -26,6 +26,7 @@ Define CrossEntropyLoss as the loss function and Adam optimizer acting only on t
 # EX04: Implementation of Transfer Learning using VGG-19
 # ============================================================
 
+# Install required libraries
 !pip install torchsummary -q
 
 import torch
@@ -41,18 +42,23 @@ from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 from torchsummary import summary
 
+
 # ============================================================
 # Step 1: Load and Preprocess Data
 # ============================================================
 
+# Unzip the dataset
 !unzip -qq ./chip_data.zip -d data
 
+# Define transformations
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
+
+# Load dataset
 dataset_path = "./data/dataset/"
 train_dataset = datasets.ImageFolder(root=f"{dataset_path}/train", transform=transform)
 test_dataset  = datasets.ImageFolder(root=f"{dataset_path}/test",  transform=transform)
@@ -64,10 +70,16 @@ print(f"Total testing  samples : {len(test_dataset)}")
 first_image, label = train_dataset[0]
 print(f"Shape of the first image: {first_image.shape}")
 
+
+# ============================================================
+# Visualise sample images
+# ============================================================
+
 def show_sample_images(dataset, num_images=5):
     fig, axes = plt.subplots(1, num_images, figsize=(15, 4))
     for i in range(num_images):
         image, label = dataset[i]
+        # Undo normalisation for display
         mean = torch.tensor([0.485, 0.456, 0.406]).view(3,1,1)
         std  = torch.tensor([0.229, 0.224, 0.225]).view(3,1,1)
         image = image * std + mean
@@ -82,45 +94,69 @@ def show_sample_images(dataset, num_images=5):
 
 show_sample_images(train_dataset)
 
+
+# DataLoaders
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 test_loader  = DataLoader(test_dataset,  batch_size=32, shuffle=False)
+
 
 # ============================================================
 # Step 2: Load Pretrained VGG-19 and Modify for Transfer Learning
 # ============================================================
 
-model = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1)
+# Load pre-trained VGG-19
+model = models.vgg19(pretrained=True)
 
+# Device setup
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 model = model.to(device)
 
+# Print original model summary
 summary(model, input_size=(3, 224, 224))
 
-# Modify the final fully connected layer to match the dataset classes
-num_classes = len(train_dataset.classes)
+
+# ============================================================
+# Modify the final fully connected layer
+# ============================================================
+
+num_classes = len(train_dataset.classes)  # number of output classes
+
+# Replace the last layer of the classifier
 model.classifier[6] = nn.Linear(in_features=4096, out_features=num_classes)
 
+# Move updated model to device
 model = model.to(device)
+
+# Print updated model summary
 summary(model, input_size=(3, 224, 224))
 
-# Freeze all layers except the final layer
+
+# ============================================================
+# Freeze all feature extractor layers (train only classifier)
+# ============================================================
+
 for param in model.features.parameters():
     param.requires_grad = False
 
-# Include the Loss function and optimizer
+# ============================================================
+# Loss function and Optimizer
+# ============================================================
+
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.classifier.parameters(), lr=0.001)
+
 
 # ============================================================
 # Step 3: Train the Model
 # ============================================================
 
-def train_model(model, train_loader, test_loader, num_epochs=10):
+def train_model(model, train_loader, test_loader, num_epochs=5):
     train_losses = []
     val_losses   = []
 
     for epoch in range(num_epochs):
+        # ----- Training -----
         model.train()
         running_loss = 0.0
         for images, labels in train_loader:
@@ -133,6 +169,7 @@ def train_model(model, train_loader, test_loader, num_epochs=10):
             running_loss += loss.item()
         train_losses.append(running_loss / len(train_loader))
 
+        # ----- Validation -----
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
@@ -147,8 +184,9 @@ def train_model(model, train_loader, test_loader, num_epochs=10):
               f"Train Loss: {train_losses[-1]:.4f}  "
               f"Val Loss: {val_losses[-1]:.4f}")
 
-    print("Name:            ")
-    print("Register Number: ")
+    # Plot
+    print("Name: Ramitha Chowdary S")
+    print("Register Number: 212224240130")
     plt.figure(figsize=(8, 5))
     plt.plot(range(1, num_epochs+1), train_losses, label='Train Loss',      marker='o')
     plt.plot(range(1, num_epochs+1), val_losses,   label='Validation Loss', marker='s')
@@ -161,11 +199,11 @@ def train_model(model, train_loader, test_loader, num_epochs=10):
 
     return train_losses, val_losses
 
-# Train the model
-train_losses, val_losses = train_model(model, train_loader, test_loader, num_epochs=10)
+# Run training
+train_losses, val_losses = train_model(model, train_loader, test_loader, num_epochs=5)
 
 # ============================================================
-# Step 4: Test the Model
+# Step 4: Test the Model — Accuracy, Confusion Matrix, Report
 # ============================================================
 
 def test_model(model, test_loader):
@@ -188,9 +226,10 @@ def test_model(model, test_loader):
     accuracy = correct / total
     print(f"\nTest Accuracy: {accuracy:.4f}")
 
+    # Confusion Matrix
     cm = confusion_matrix(all_labels, all_preds)
-    print("Name:            ")
-    print("Register Number: ")
+    print("Name: Ramitha Chowdary S")
+    print("Register Number: 212224240130")
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                 xticklabels=train_dataset.classes,
@@ -201,13 +240,15 @@ def test_model(model, test_loader):
     plt.tight_layout()
     plt.show()
 
-    print("Name:            ")
-    print("Register Number: ")
+    # Classification Report
+    print("Name: Ramitha Chowdary S")
+    print("Register Number: 212224240130")
     print("\nClassification Report:")
     print(classification_report(all_labels, all_preds,
                                 target_names=train_dataset.classes))
 
 test_model(model, test_loader)
+
 
 # ============================================================
 # Step 5: Predict on a Single Image
@@ -225,6 +266,7 @@ def predict_image(model, image_index, dataset):
 
     class_names = dataset.classes
 
+    # Undo normalisation for display
     mean = torch.tensor([0.485, 0.456, 0.406]).view(3,1,1)
     std  = torch.tensor([0.229, 0.224, 0.225]).view(3,1,1)
     img_display = image * std + mean
@@ -239,8 +281,10 @@ def predict_image(model, image_index, dataset):
 
     print(f"Actual: {class_names[label]}, Predicted: {class_names[predicted]}")
 
+# Example predictions
 predict_image(model, image_index=55, dataset=test_dataset)
 predict_image(model, image_index=25, dataset=test_dataset)
+
 ```
 
 ## OUTPUT
